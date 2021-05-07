@@ -44,7 +44,9 @@ void checkSensor() {
 
 void pollSensor() {
     sensorData["Temperature, °C"] = bme.readTemperature();
-    sensorData["Pressure, hPa"] = bme.readPressure() / 100.0F;
+    sensorData["Temperature, °F"] = sensorData["Temperature, °C"] * 1.8f + 32.0f;
+    sensorData["Pressure, hPa"] = bme.readPressure() / 100.0f;
+    sensorData["Pressure, mmHg"] = sensorData["Pressure, hPa"] * 0.75f;
     sensorData["Altitude, m"] = bme.readAltitude(SEALEVELPRESSURE_HPA);
     sensorData["Humidity, %"] = bme.readHumidity();
 }
