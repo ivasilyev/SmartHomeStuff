@@ -2,10 +2,7 @@ using namespace std;
 
 #include <unordered_map>
 #include <Arduino.h>
-#include <SPI.h>
 #include <Wire.h>
-//#include <../.pio/libdeps/esp32dev/TFT_eSPI/TFT_eSPI.h>
-//#include <setup_display.h>
 #include <../.pio/libdeps/esp32dev/Adafruit Unified Sensor/Adafruit_Sensor.h>
 #include <../.pio/libdeps/esp32dev/Adafruit BME280 Library/Adafruit_BME280.h>
 
@@ -13,6 +10,8 @@ using namespace std;
 #include <WiFi.h>
 #include <WebServer.h>
 
+#include <../.pio/libdeps/esp32dev/TFT_eSPI/TFT_eSPI.h>
+#include <SPI.h>
 
 #define SEALEVELPRESSURE_HPA (1013.25)
 
@@ -20,6 +19,8 @@ const int DISPLAY_HEIGHT = 128;
 const int DISPLAY_WIDTH = 128;
 const int BME280_ADDR = 0x76;
 const int BME280_POLLING_DELAY = 1200;
+
+const int BG = TFT_BLACK;
 
 /*
 BME280 I2C wiring:
@@ -31,7 +32,10 @@ GND - GND
 
 Adafruit_BME280 bme;
 unordered_map<string, float> sensorData;
+
 WebServer webServer(80);
+
+TFT_eSPI tft = TFT_eSPI();  // Invoke library, pins defined in User_Setup.h
 
 void checkSensor() {
     Serial.println(F("BME280 test"));
@@ -40,6 +44,7 @@ void checkSensor() {
         Serial.println("Could not find a valid BME280 sensor, check wiring!");
         while (1);
     }
+    Serial.println(F("BME280 OK"));
 }
 
 void pollSensor() {
@@ -140,12 +145,32 @@ void setupWebServer() {
     webServer.on("/json", HTTP_GET, webHandleJSON);
 }
 
+void drawSensor() {
+    tft.fillScreen(BG);
+    tft.setCursor(0, 10);
+    String s ="";
+    for (auto it : sensorData) {
+        tft.setTextFont(2.5);
+        tft.setTextColor(TFT_WHITE);
+        s = it.first.c_str();
+        s = s.substring(s.indexOf(",") + 1, s.length());
+        tft.println("  " + String(it.second) + s);
+    }
+}
+
 void setup() {
     Serial.begin(9600);
     checkSensor();
     forceConnectToWiFi();
     webServer.begin();
     setupWebServer();
+
+    tft.init();
+    //tft.setWindow(20, 20, 148, 148);
+    //tft.setRotation(0);
+    //tft.setTextColor(TFT_GREEN);  // Adding a black background colour erases previous text automatically
+    //tft.fillScreen(TFT_RED);
+    //tft.drawRect(0,0,128,128,TFT_GREEN);
 }
 
 void loop() { 
@@ -153,4 +178,5 @@ void loop() {
     // printSensor();
     delay(BME280_POLLING_DELAY);
     webServer.handleClient();
+    drawSensor();
 }
