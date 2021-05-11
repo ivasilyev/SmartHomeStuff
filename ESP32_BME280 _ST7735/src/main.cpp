@@ -20,8 +20,6 @@ const int DISPLAY_WIDTH = 128;
 const int BME280_ADDR = 0x76;
 const int BME280_POLLING_DELAY = 1200;
 
-const int BG = TFT_BLACK;
-
 /*
 BME280 I2C wiring:
 SCL - D22
@@ -37,6 +35,8 @@ WebServer webServer(80);
 
 TFT_eSPI tft = TFT_eSPI();  // Invoke library, pins defined in User_Setup.h
 
+const int BG = TFT_BLACK;
+
 /*
 ST7735 SPI wiring:
 LED 3V3 (!)
@@ -49,6 +49,7 @@ GND GND
 VCC 3V3
 */
 
+
 void checkSensor() {
     Serial.println(F("BME280 test"));
     bool status = bme.begin(BME280_ADDR);  
@@ -59,6 +60,7 @@ void checkSensor() {
     Serial.println(F("BME280 OK"));
 }
 
+
 void pollSensor() {
     sensorData["Temperature, °C"] = bme.readTemperature();
     sensorData["Temperature, °F"] = sensorData["Temperature, °C"] * 1.8f + 32.0f;
@@ -68,6 +70,7 @@ void pollSensor() {
     sensorData["Humidity, %"] = bme.readHumidity();
 }
 
+
 void printSensor() {
     for (auto it : sensorData) {
         Serial.print(it.first.c_str());
@@ -75,6 +78,7 @@ void printSensor() {
         Serial.println(it.second);
     }
 }
+
 
 String stringifySensor() {
     String out = "<ul>";
@@ -90,6 +94,7 @@ String stringifySensor() {
     out += "</ul>";
     return out;
 }
+
 
 void forceConnectToWiFi() {
     WiFi.setHostname("ESP32_BME280");
@@ -138,6 +143,7 @@ void webHandleRoot() {
     webServer.send(200, "text/html", out); 
 }
 
+
 void webHandleJSON() {
     Serial.println("Sending JSON");
     String out = "{";
@@ -151,6 +157,7 @@ void webHandleJSON() {
     out = out.substring(0, out.length() - 2) + "}";
     webServer.send(200, "application/json", out);
 }
+
 
 void setupWebServer() {
     webServer.on("/", HTTP_GET, webHandleRoot);
