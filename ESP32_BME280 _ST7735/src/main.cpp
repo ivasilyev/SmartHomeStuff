@@ -37,6 +37,18 @@ WebServer webServer(80);
 
 TFT_eSPI tft = TFT_eSPI();  // Invoke library, pins defined in User_Setup.h
 
+/*
+ST7735 SPI wiring:
+LED 3V3 (!)
+SCK G16
+SDA (MOSI) G23
+AO (DC) G2
+Reset G4
+CS G17
+GND GND
+VCC 3V3
+*/
+
 void checkSensor() {
     Serial.println(F("BME280 test"));
     bool status = bme.begin(BME280_ADDR);  
