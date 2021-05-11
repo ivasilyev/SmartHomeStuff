@@ -145,6 +145,18 @@ void setupWebServer() {
     webServer.on("/json", HTTP_GET, webHandleJSON);
 }
 
+
+void testDisplay() {
+    tft.fillScreen(TFT_RED);
+    delay(BME280_POLLING_DELAY / 5);
+    tft.fillScreen(TFT_GREEN);
+    delay(BME280_POLLING_DELAY / 5);
+    tft.fillScreen(TFT_BLUE);
+    tft.drawRect(0,0,128,128,TFT_GREEN);
+    delay(BME280_POLLING_DELAY);
+}
+
+
 void drawSensor() {
     tft.fillScreen(BG);
     tft.setCursor(0, 10);
@@ -158,20 +170,21 @@ void drawSensor() {
     }
 }
 
+
 void setup() {
     Serial.begin(9600);
     checkSensor();
     forceConnectToWiFi();
     webServer.begin();
     setupWebServer();
-
     tft.init();
+    tft.begin();
+    //testDisplay();
     //tft.setWindow(20, 20, 148, 148);
     //tft.setRotation(0);
     //tft.setTextColor(TFT_GREEN);  // Adding a black background colour erases previous text automatically
-    //tft.fillScreen(TFT_RED);
-    //tft.drawRect(0,0,128,128,TFT_GREEN);
 }
+
 
 void loop() { 
     pollSensor();
