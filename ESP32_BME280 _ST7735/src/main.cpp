@@ -10,8 +10,8 @@ using namespace std;
 #include <WiFi.h>
 #include <WebServer.h>
 
-#include <../.pio/libdeps/esp32dev/TFT_eSPI/TFT_eSPI.h>
 #include <SPI.h>
+#include <../.pio/libdeps/esp32dev/TFT_eSPI/TFT_eSPI.h>
 
 #define SEALEVELPRESSURE_HPA (1013.25)
 
@@ -178,17 +178,27 @@ void testDisplay() {
 
 void drawSensor() {
     tft.fillScreen(BG);
-    tft.setCursor(0, 10);
+    tft.setCursor(0, 1);
     String s ="";
     for (auto it : sensorData) {
-        tft.setTextFont(2.5);
-        tft.setTextColor(TFT_WHITE);
         s = it.first.c_str();
-        s = s.substring(s.indexOf(",") + 1, s.length());
-        tft.println("  " + String(it.second) + s);
+
+        if (! s.endsWith("%") && ! s.endsWith("C") && ! s.endsWith("mmHg")) {
+            continue;
+        }
+
+        // s = s.substring(s.indexOf(",") + 2, s.length());
+        s.replace("°", "`");
+
+        tft.setTextFont(2.4);
+        tft.setTextColor(TFT_YELLOW);
+        tft.println(s);
+        tft.setTextFont(4.9);
+        tft.setTextColor(TFT_WHITE);   
+        tft.println(it.second);
     }
 }
-
+ 
 
 void setup() {
     Serial.begin(9600);
