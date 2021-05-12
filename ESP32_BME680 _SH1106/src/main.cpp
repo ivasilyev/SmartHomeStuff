@@ -10,6 +10,7 @@
 #include <WiFi.h>
 #include <WebServer.h>
 
+#include <../.pio/libdeps/esp32dev/U8g2/src/U8g2lib.h>
 
 #define SEALEVELPRESSURE_HPA (1013.25)
 
@@ -32,7 +33,7 @@ WebServer webServer(80);
 
 
 /*
-SH1106 SPI wiring:
+SH1106 18x64 1.3" OLED SPI wiring:
 LED 3V3 (!)
 SCK G16
 SDA (MOSI) G23
@@ -42,6 +43,11 @@ CS G17
 GND GND
 VCC 3V3
 */
+
+// bus, *rotation, cs, dc, reset
+//U8G2_SH1106_128X64_NONAME_1_4W_HW_SPI u8g2(U8G2_R0, 17, 2, 4);
+// bus, *rotation, clock, data, cs, dc, reset
+U8G2_SH1106_128X64_NONAME_1_4W_SW_SPI u8g2(U8G2_R0, 16, 23, 17, 2, 4);
 
 
 void checkSensor() {
@@ -169,12 +175,34 @@ void setupWebServer() {
 }
 
 
+void drawSensor() {
+    u8g2.firstPage();
+    int lineSpacing = 17;
+    do {
+        int nextCursorPosition = 10;
+        for (auto it : sensorData) {
+            String s = it.first.c_str();
+
+            if (! s.endsWith("%") && ! s.endsWith("C") && ! s.endsWith("mmHg") && ! s.endsWith("KOhms")) {
+                continue;
+            }
+            u8g2.setFont(u8g2_font_prospero_nbp_tf);
+            u8g2.drawUTF8(0, nextCursorPosition, s.c_str());
+            u8g2.drawUTF8(93, nextCursorPosition, String(it.second).c_str());
+            nextCursorPosition += lineSpacing;
+        }
+    } while (u8g2.nextPage());
+}
+
+
 void setup() {
     Serial.begin(9600);
     checkSensor();
     forceConnectToWiFi();
     webServer.begin();
     setupWebServer();
+
+    u8g2.begin();
 }
 
 
@@ -183,4 +211,6 @@ void loop() {
     // printSensor();
     delay(BME680_POLLING_DELAY);
     webServer.handleClient();
+
+    drawSensor();
 }
