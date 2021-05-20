@@ -5,7 +5,7 @@ A meteostation with the following features:
 - Bosch Sensortec BME680 as a sensor for:
   - Altitude;
   - Atmospheric pressure;
-  - Gas sensor;
+  - Gas resistance;
   - Humidity;
   - Temperature;
 - Noname SH1106 128x64 color 1.3″ OLED display
