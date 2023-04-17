@@ -1,4 +1,5 @@
 #include <map>
+#include <string>
 #include <Arduino.h>
 #include <Wire.h>
 #include <SPI.h>
@@ -12,10 +13,29 @@
 
 #include <../.pio/libdeps/esp32dev/U8g2/src/U8g2lib.h>
 
+#define DEGREE_SIGN "\xB0"
 #define SEALEVELPRESSURE_HPA (1013.25)
+#define PROMETHEUS_NAMESPACE "iot"
+
+#ifdef __cplusplus
+    extern "C" {
+#endif
+    uint8_t temprature_sens_read();
+#ifdef __cplusplus
+}
+#endif
+uint8_t temprature_sens_read();
+
 
 const int BME680_ADDR = 0x77;
 const int BME680_POLLING_DELAY = 1200;
+const std::vector<std::string> DISPLAY_METRICS = {
+    "gas_resistance_kohm",
+    "air_humidity_percent",
+    "air_pressure_mmhg",
+    "air_temperature_celsius",
+};
+
 
 /*
 BME680 I2C wiring:
@@ -27,10 +47,47 @@ GND - GND
 
 Adafruit_BME680 bme;
 //map<string, float> sensorData;
-std::map<std::string, float> sensorData;
+std::map<std::string, std::map<std::string, std::string>> sensorData;
+
+void _populateSensorData(std::string name, std::string help, std::string type) {
+    sensorData[name] = std::map<std::string, std::string> {
+        {"help", help},
+        {"type", type},
+        {"value", ""}
+    };
+}
+
+void populateSensorData() {
+    std::string g = "gauge";
+
+    _populateSensorData("air_temperature_celsius", "Temperature, " DEGREE_SIGN "C", g);
+    _populateSensorData("air_temperature_fahrenheit", "Temperature, " DEGREE_SIGN "F", g);
+    _populateSensorData("air_pressure_hpa", "Atmospheric Pressure, hPa", g);
+    _populateSensorData("air_pressure_mmhg", "Pressure, mmHg", g);
+    _populateSensorData("altitude_m", "Altitude, m", g);
+    _populateSensorData("air_humidity_percent", "Humidity, %", g);
+    _populateSensorData("gas_resistance_kohm", "Gas, KOhms", g);
+
+    _populateSensorData("system_up_time_ms", "System uptime", g);
+    _populateSensorData("memory_total_heap_size", "Total heap memory size", g);
+    _populateSensorData("memory_free_heap_size_bytes", "Free memory size", g);
+    _populateSensorData("cpu_frequency_mhz", "CPU frequency", g);
+    _populateSensorData("cpu_temperature_celsius", "CPU temperature, " DEGREE_SIGN "C", g);
+    _populateSensorData("cpu_temperature_fahrenheit", "CPU temperature, " DEGREE_SIGN "F", g);
+    _populateSensorData("sketch_size_bytes", "Sketch size", g);
+    _populateSensorData("flash_size_bytes", "Flash size", g);
+    _populateSensorData("available_size_bytes", "Available size", g);
+}
+
+void setSensorData(std::string name, float value) {
+    sensorData[name]["value"] = std::to_string(value);
+}
+
+std::string getSensorData(std::string name) {
+    return sensorData[name]["value"];
+}
 
 WebServer webServer(80);
-
 
 /*
 SH1106 18x64 1.3" OLED SPI wiring:
@@ -66,39 +123,67 @@ void checkSensor() {
     bme.setHumidityOversampling(BME680_OS_2X);
     bme.setPressureOversampling(BME680_OS_4X);
     bme.setIIRFilterSize(BME680_FILTER_SIZE_3);
-    bme.setGasHeater(320, 150);  // 320*C for 150 ms
+    bme.setGasHeater(320, 150);  // 320 °C for 150 ms
 }
 
-
 void pollSensor() {
-    sensorData["Temperature, °C"] = bme.readTemperature();
-    sensorData["Temperature, °F"] = sensorData["Temperature, °C"] * 1.8f + 32.0f;
-    sensorData["Pressure, hPa"] = bme.readPressure() / 100.0f;
-    sensorData["Pressure, mmHg"] = sensorData["Pressure, hPa"] * 0.75f;
-    sensorData["Altitude, m"] = bme.readAltitude(SEALEVELPRESSURE_HPA);
-    sensorData["Humidity, %"] = bme.readHumidity();
-    sensorData["Gas, KOhms"] = bme.readGas() / 1000.0f;
+    float celsius = bme.readTemperature();
+    setSensorData("air_temperature_celsius", celsius);
+    setSensorData("air_temperature_fahrenheit", celsius * 1.8f + 32.0f);
+
+    float pascal = bme.readPressure();
+    setSensorData("air_pressure_hpa", pascal / 100.0f);
+    setSensorData("air_pressure_mmhg", pascal * 7.5006f / 1000.0f);
+
+    setSensorData("altitude_m", bme.readAltitude(SEALEVELPRESSURE_HPA));
+    setSensorData("air_humidity_percent", bme.readHumidity());
+    setSensorData("gas_resistance_kohm", bme.readGas() / 1000.0f);
+
+    setSensorData("system_up_time_ms", millis());
+    setSensorData("memory_total_heap_size", ESP.getHeapSize());
+    setSensorData("memory_free_heap_size_bytes", ESP.getFreeHeap());
+    setSensorData("cpu_frequency_mhz", getCpuFrequencyMhz());
+    
+    float fahrenheit = temprature_sens_read();
+    setSensorData("cpu_temperature_fahrenheit", fahrenheit);
+    setSensorData("cpu_temperature_celsius", (fahrenheit - 32.0f) / 1.8f);
+
+    int sketch_size = ESP.getSketchSize();
+    int flash_size =  ESP.getFreeSketchSpace();
+    int available_size = flash_size - sketch_size;
+    setSensorData("sketch_size_bytes", sketch_size);
+    setSensorData("flash_size_bytes", flash_size);
+    setSensorData("available_size_bytes", available_size);
+}
+
+std::map<String, String> getSensorHelpAndValue(std::string name) {
+    String help = sensorData[name]["help"].c_str();
+    String value = getSensorData(name).c_str();
+    return std::map<String, String> { 
+        {"help", help}, 
+        {"value", value}
+    };
 }
 
 
 void printSensor() {
-    for (auto it : sensorData) {
-        Serial.print(it.first.c_str());
+    for (auto pair : sensorData) {
+        auto values = getSensorHelpAndValue(pair.first);
+        Serial.print(values["help"]);
         Serial.print(": ");
-        Serial.println(it.second);
+        Serial.println(values["value"]);
     }
 }
 
 
-String stringifySensor() {
+String sensorToTag() {
     String out = "<ul>";
-    for (auto it : sensorData) {
+    for (auto pair : sensorData) {
+        auto values = getSensorHelpAndValue(pair.first);
         out += "<li>";
-        //
-        out += it.first.c_str();
+        out += values["help"];
         out += ": ";
-        out += String(it.second);
-        //
+        out += values["value"];
         out += "</li>";
     }
     out += "</ul>";
@@ -142,7 +227,7 @@ void webHandleRoot() {
     "                BME680 data:\n"
     "                <!-- Payload placeholder -->\n"
     ;
-    out += stringifySensor();
+    out += sensorToTag();
     out +=
     "            </div>\n"
     "        </div>\n"
@@ -157,11 +242,13 @@ void webHandleRoot() {
 void webHandleJSON() {
     Serial.println("Sending JSON");
     String out = "{";
-    for (auto it : sensorData) {
+    for (auto pair : sensorData) {
+        auto values = getSensorHelpAndValue(pair.first);
+
         out += "\"";
-        out += it.first.c_str();
+        out += values["help"];
         out += "\": ";
-        out += String(it.second);
+        out += values["value"];
         out += ", ";
     }
     out = out.substring(0, out.length() - 2) + "}";
@@ -169,9 +256,36 @@ void webHandleJSON() {
 }
 
 
+String handleMetric(std::string name) {
+    /*
+    Example Prometheus exporter output:
+    # HELP go_goroutines Number of goroutines that currently exist.
+    # TYPE go_goroutines gauge
+    go_goroutines 10
+    */
+    std::string out;
+    std::string _name = PROMETHEUS_NAMESPACE "_" + name;
+    out += "# HELP " + _name + " " + sensorData[name]["help"] + "\r\n";
+    out += "# TYPE " + _name + " " + sensorData[name]["type"] + "\r\n";
+    out += _name + " " + sensorData[name]["value"] + "\r\n";
+    return out.c_str();
+}
+
+
+void webHandleMetrics() {
+    Serial.println("Sending metrics");
+    String out;
+    for (auto pair : sensorData) {
+        out += handleMetric(pair.first);
+    }
+    webServer.send(200, "text/plain", out);
+}
+
+
 void setupWebServer() {
     webServer.on("/", HTTP_GET, webHandleRoot);
     webServer.on("/json", HTTP_GET, webHandleJSON);
+    webServer.on("/metrics", HTTP_GET, webHandleMetrics);
 }
 
 
@@ -180,15 +294,12 @@ void drawSensor() {
     int lineSpacing = 17;
     do {
         int nextCursorPosition = 10;
-        for (auto it : sensorData) {
-            String s = it.first.c_str();
+        for (auto i : DISPLAY_METRICS) {
+            auto values = getSensorHelpAndValue(i);
 
-            if (! s.endsWith("%") && ! s.endsWith("C") && ! s.endsWith("mmHg") && ! s.endsWith("KOhms")) {
-                continue;
-            }
             u8g2.setFont(u8g2_font_prospero_nbp_tf);
-            u8g2.drawUTF8(0, nextCursorPosition, s.c_str());
-            u8g2.drawUTF8(93, nextCursorPosition, String(it.second).c_str());
+            u8g2.drawUTF8(0, nextCursorPosition, values["help"].c_str());
+            u8g2.drawUTF8(93, nextCursorPosition, values["value"].c_str());
             nextCursorPosition += lineSpacing;
         }
     } while (u8g2.nextPage());
@@ -203,6 +314,7 @@ void setup() {
     setupWebServer();
 
     u8g2.begin();
+    populateSensorData();
 }
 
 
