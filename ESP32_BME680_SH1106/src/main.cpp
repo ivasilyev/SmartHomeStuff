@@ -13,7 +13,6 @@
 
 #include <../.pio/libdeps/esp32dev/U8g2/src/U8g2lib.h>
 
-#define DEGREE_SIGN "\xB0"
 #define SEALEVELPRESSURE_HPA (1013.25)
 #define PROMETHEUS_NAMESPACE "iot"
 
@@ -28,7 +27,7 @@ uint8_t temprature_sens_read();
 
 
 const int BME680_ADDR = 0x77;
-const int BME680_POLLING_DELAY = 1200;
+const int BME680_POLLING_DELAY = 3000;
 const std::vector<std::string> DISPLAY_METRICS = {
     "gas_resistance_kohm",
     "air_humidity_percent",
@@ -60,8 +59,8 @@ void _populateSensorData(std::string name, std::string help, std::string type) {
 void populateSensorData() {
     std::string g = "gauge";
 
-    _populateSensorData("air_temperature_celsius", "Temperature, " DEGREE_SIGN "C", g);
-    _populateSensorData("air_temperature_fahrenheit", "Temperature, " DEGREE_SIGN "F", g);
+    _populateSensorData("air_temperature_celsius", "Temperature, °C", g);
+    _populateSensorData("air_temperature_fahrenheit", "Temperature, °F", g);
     _populateSensorData("air_pressure_hpa", "Atmospheric Pressure, hPa", g);
     _populateSensorData("air_pressure_mmhg", "Pressure, mmHg", g);
     _populateSensorData("altitude_m", "Altitude, m", g);
@@ -72,8 +71,8 @@ void populateSensorData() {
     _populateSensorData("memory_total_heap_size", "Total heap memory size", g);
     _populateSensorData("memory_free_heap_size_bytes", "Free memory size", g);
     _populateSensorData("cpu_frequency_mhz", "CPU frequency", g);
-    _populateSensorData("cpu_temperature_celsius", "CPU temperature, " DEGREE_SIGN "C", g);
-    _populateSensorData("cpu_temperature_fahrenheit", "CPU temperature, " DEGREE_SIGN "F", g);
+    _populateSensorData("cpu_temperature_celsius", "CPU temperature, °C", g);
+    _populateSensorData("cpu_temperature_fahrenheit", "CPU temperature, °F", g);
     _populateSensorData("sketch_size_bytes", "Sketch size", g);
     _populateSensorData("flash_size_bytes", "Flash size", g);
     _populateSensorData("available_size_bytes", "Available size", g);
@@ -83,9 +82,14 @@ void setSensorData(std::string name, float value) {
     sensorData[name]["value"] = std::to_string(value);
 }
 
-std::string getSensorData(std::string name) {
-    return sensorData[name]["value"];
+
+std::map<String, String> getSensorHelpAndValue(std::string name) {
+    return std::map<String, String> { 
+        {"help", sensorData[name]["help"].c_str()}, 
+        {"value", sensorData[name]["value"].c_str()}
+    };
 }
+
 
 WebServer webServer(80);
 
@@ -126,6 +130,35 @@ void checkSensor() {
     bme.setGasHeater(320, 150);  // 320 °C for 150 ms
 }
 
+
+String metricsBuffer;
+
+
+std::string handleMetric(std::string name) {
+    /*
+    Example Prometheus exporter output:
+    # HELP go_goroutines Number of goroutines that currently exist.
+    # TYPE go_goroutines gauge
+    go_goroutines 10
+    */
+    std::string out;
+    std::string _name = PROMETHEUS_NAMESPACE "_" + name;
+    out += "# HELP " + _name + " " + sensorData[name]["help"] + "\n";
+    out += "# TYPE " + _name + " " + sensorData[name]["type"] + "\n";
+    out += _name + " " + sensorData[name]["value"] + "\n";
+    return out;
+}
+
+
+void updateMetricsBuffer() {
+    std::string out;
+    for (auto pair : sensorData) {
+        out += handleMetric(pair.first);
+    }
+    metricsBuffer = out.c_str();
+}
+
+
 void pollSensor() {
     float celsius = bme.readTemperature();
     setSensorData("air_temperature_celsius", celsius);
@@ -154,15 +187,8 @@ void pollSensor() {
     setSensorData("sketch_size_bytes", sketch_size);
     setSensorData("flash_size_bytes", flash_size);
     setSensorData("available_size_bytes", available_size);
-}
 
-std::map<String, String> getSensorHelpAndValue(std::string name) {
-    String help = sensorData[name]["help"].c_str();
-    String value = getSensorData(name).c_str();
-    return std::map<String, String> { 
-        {"help", help}, 
-        {"value", value}
-    };
+    updateMetricsBuffer();
 }
 
 
@@ -256,29 +282,9 @@ void webHandleJSON() {
 }
 
 
-String handleMetric(std::string name) {
-    /*
-    Example Prometheus exporter output:
-    # HELP go_goroutines Number of goroutines that currently exist.
-    # TYPE go_goroutines gauge
-    go_goroutines 10
-    */
-    std::string out;
-    std::string _name = PROMETHEUS_NAMESPACE "_" + name;
-    out += "# HELP " + _name + " " + sensorData[name]["help"] + "\r\n";
-    out += "# TYPE " + _name + " " + sensorData[name]["type"] + "\r\n";
-    out += _name + " " + sensorData[name]["value"] + "\r\n";
-    return out.c_str();
-}
-
-
 void webHandleMetrics() {
     Serial.println("Sending metrics");
-    String out;
-    for (auto pair : sensorData) {
-        out += handleMetric(pair.first);
-    }
-    webServer.send(200, "text/plain", out);
+    webServer.send(200, "text/plain", metricsBuffer);
 }
 
 
