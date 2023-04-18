@@ -13,7 +13,6 @@
 
 #include <../.pio/libdeps/esp32dev/U8g2/src/U8g2lib.h>
 
-#define SEALEVELPRESSURE_HPA (1013.25)
 #define PROMETHEUS_NAMESPACE "iot"
 
 #ifdef __cplusplus
@@ -60,22 +59,20 @@ void populateSensorData() {
     std::string g = "gauge";
 
     _populateSensorData("air_temperature_celsius", "Temperature, °C", g);
-    _populateSensorData("air_temperature_fahrenheit", "Temperature, °F", g);
-    _populateSensorData("air_pressure_hpa", "Atmospheric Pressure, hPa", g);
     _populateSensorData("air_pressure_mmhg", "Pressure, mmHg", g);
-    _populateSensorData("altitude_m", "Altitude, m", g);
     _populateSensorData("air_humidity_percent", "Humidity, %", g);
     _populateSensorData("gas_resistance_kohm", "Gas, KOhms", g);
 
-    _populateSensorData("system_up_time_ms", "System uptime", g);
-    _populateSensorData("memory_total_heap_size", "Total heap memory size", g);
-    _populateSensorData("memory_free_heap_size_bytes", "Free memory size", g);
-    _populateSensorData("cpu_frequency_mhz", "CPU frequency", g);
+    // From https://github.com/espressif/arduino-esp32/blob/master/cores/esp32/Esp.h
+    _populateSensorData("system_up_time_ms", "System uptime in ms", g);
+    _populateSensorData("cpu_frequency_mhz", "CPU frequency in MHz", g);
     _populateSensorData("cpu_temperature_celsius", "CPU temperature, °C", g);
-    _populateSensorData("cpu_temperature_fahrenheit", "CPU temperature, °F", g);
-    _populateSensorData("sketch_size_bytes", "Sketch size", g);
-    _populateSensorData("flash_size_bytes", "Flash size", g);
-    _populateSensorData("available_size_bytes", "Available size", g);
+    _populateSensorData("memory_heap_used_bytes", "Total heap memory size in bytes", g);
+    _populateSensorData("memory_heap_free_bytes", "Free memory size in bytes", g);
+    _populateSensorData("memory_psram_total_bytes", "Total SPI RAM size in bytes", g);
+    _populateSensorData("memory_psram_free_bytes", "Free SPI RAM size in bytes", g);
+    _populateSensorData("memory_flash_used_bytes", "Sketch size in bytes", g);
+    _populateSensorData("memory_flash_total_bytes", "Flash size in bytes", g);
 }
 
 void setSensorData(std::string name, float value) {
@@ -160,33 +157,20 @@ void updateMetricsBuffer() {
 
 
 void pollSensor() {
-    float celsius = bme.readTemperature();
-    setSensorData("air_temperature_celsius", celsius);
-    setSensorData("air_temperature_fahrenheit", celsius * 1.8f + 32.0f);
-
-    float pascal = bme.readPressure();
-    setSensorData("air_pressure_hpa", pascal / 100.0f);
-    setSensorData("air_pressure_mmhg", pascal * 7.5006f / 1000.0f);
-
-    setSensorData("altitude_m", bme.readAltitude(SEALEVELPRESSURE_HPA));
+    setSensorData("air_temperature_celsius", bme.readTemperature());
+    setSensorData("air_pressure_mmhg", bme.readPressure() * 7.5006f / 1000.0f);
     setSensorData("air_humidity_percent", bme.readHumidity());
     setSensorData("gas_resistance_kohm", bme.readGas() / 1000.0f);
 
     setSensorData("system_up_time_ms", millis());
-    setSensorData("memory_total_heap_size", ESP.getHeapSize());
-    setSensorData("memory_free_heap_size_bytes", ESP.getFreeHeap());
     setSensorData("cpu_frequency_mhz", getCpuFrequencyMhz());
-    
-    float fahrenheit = temprature_sens_read();
-    setSensorData("cpu_temperature_fahrenheit", fahrenheit);
-    setSensorData("cpu_temperature_celsius", (fahrenheit - 32.0f) / 1.8f);
-
-    int sketch_size = ESP.getSketchSize();
-    int flash_size =  ESP.getFreeSketchSpace();
-    int available_size = flash_size - sketch_size;
-    setSensorData("sketch_size_bytes", sketch_size);
-    setSensorData("flash_size_bytes", flash_size);
-    setSensorData("available_size_bytes", available_size);
+    setSensorData("cpu_temperature_celsius", (temprature_sens_read() - 32.0f) / 1.8f);
+    setSensorData("memory_heap_used_bytes", ESP.getHeapSize());
+    setSensorData("memory_heap_free_bytes", ESP.getFreeHeap());
+    setSensorData("memory_psram_total_bytes", ESP.getPsramSize());
+    setSensorData("memory_psram_free_bytes", ESP.getFreePsram());
+    setSensorData("memory_flash_used_bytes", ESP.getSketchSize());
+    setSensorData("memory_flash_total_bytes", ESP.getFreeSketchSpace());
 
     updateMetricsBuffer();
 }
